@@ -1,0 +1,70 @@
+import websocket
+import json
+
+# Replace 'YOUR_API_TOKEN' with your actual Deriv API token
+api_token = 'YOUR_API_TOKEN'
+
+def on_open(ws):
+    print("Connection opened")
+    
+    # Example request to authorize the bot
+    auth_data = json.dumps({
+        "authorize": api_token
+    })
+    ws.send(auth_data)
+
+def on_message(ws, message):
+    data = json.loads(message)
+    print("Received message:", data)
+    
+    if 'error' in data:
+        print("Error:", data['error']['message'])
+        return
+
+    if data.get('msg_type') == 'authorize':
+        # Once authorized, request the latest price for a specific market
+        market_request = json.dumps({
+            "ticks_history": "R_100",  # Example market
+            "end": "latest",
+            "start": 1,
+            "style": "ticks"
+        })
+        ws.send(market_request)
+    
+    elif data.get('msg_type') == 'history':
+        prices = data['history']['prices']
+        print("Latest prices:", prices)
+        
+        # Example logic: If the last price is higher than the second last, buy
+        if prices[-1] > prices[-2]:
+            trade_request = json.dumps({
+                "buy": 1,
+                "price": 10,  # Amount to trade
+                "parameters": {
+                    "symbol": "R_100",
+                    "duration": 5,
+                    "duration_unit": "t",
+                    "basis": "stake",
+                    "contract_type": "CALL",
+                    "currency": "USD"
+                }
+            })
+            ws.send(trade_request)
+    
+    elif data.get('msg_type') == 'buy':
+        print("Trade details:", data['buy'])
+
+def on_error(ws, error):
+    print("Error:", error)
+
+def on_close(ws):
+    print("Connection closed")
+
+if __name__ == "__main__":
+    websocket_url = "wss://ws.binaryws.com/websockets/v3?app_id=1089"  # Example app_id
+    ws = websocket.WebSocketApp(websocket_url,
+                                on_open=on_open,
+                                on_message=on_message,
+                                on_error=on_error,
+                                on_close=on_close)
+    ws.run_forever()
